@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HOS Approaching Limit</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      background: #f5f5f5;
+      color: #333;
+      padding: 16px;
+    }
+
+    .khos-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .khos-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .khos-controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .khos-controls label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .khos-controls input[type="number"] {
+      width: 55px;
+      padding: 4px 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .khos-btn {
+      padding: 5px 14px;
+      background: #0073e6;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .khos-btn:hover { background: #005bb5; }
+
+    .khos-status-bar {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+      min-height: 18px;
+    }
+
+    .khos-status-bar.error { color: #c0392b; font-weight: 500; }
+
+    .khos-legend {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    .khos-legend-item { display: flex; align-items: center; gap: 5px; }
+
+    .khos-dot { width: 11px; height: 11px; border-radius: 50%; }
+    .dot-critical { background: #e74c3c; }
+    .dot-warning  { background: #e67e22; }
+    .dot-caution  { background: #d4ac0d; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    thead th {
+      background: #2c3e50;
+      color: white;
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    tbody tr { border-bottom: 1px solid #eee; }
+    tbody tr:last-child { border-bottom: none; }
+
+    tbody td {
+      padding: 8px 12px;
+      vertical-align: middle;
+    }
+
+    .col-name { font-weight: 500; }
+    .col-time { font-family: 'Courier New', monospace; font-size: 13px; }
+    .col-drive { font-weight: 700; font-size: 14px; }
+
+    tr.critical { background: #fde8e8; border-left: 4px solid #e74c3c; }
+    tr.warning  { background: #fef3e2; border-left: 4px solid #e67e22; }
+    tr.caution  { background: #fefde8; border-left: 4px solid #d4ac0d; }
+    tr.critical:hover { background: #fbd5d5; }
+    tr.warning:hover  { background: #fde8c8; }
+    tr.caution:hover  { background: #fef9c3; }
+
+    .exceeded { color: #e74c3c; font-weight: 700; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge-D   { background: #d5f5e3; color: #1e8449; }
+    .badge-ON  { background: #d6eaf8; color: #1a5276; }
+    .badge-OFF { background: #eaecee; color: #5d6d7e; }
+    .badge-SB  { background: #e8daef; color: #6c3483; }
+    .badge-PC  { background: #fef9e7; color: #7d6608; }
+    .badge-YM  { background: #fdebd0; color: #784212; }
+    .badge-WT  { background: #eaf2ff; color: #1a5276; }
+    .badge-NA  { background: #eaecee; color: #5d6d7e; }
+
+    .cell-center { text-align: center; padding: 24px; color: #888; font-style: italic; }
+    .cell-error  { text-align: center; padding: 24px; color: #c0392b; }
+
+    .khos-footer {
+      font-size: 11px;
+      color: #bbb;
+      margin-top: 8px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+<div class="khos-header">
+  <div class="khos-title">HOS — Approaching Drive Limit</div>
+  <div class="khos-controls">
+    <label>
+      Threshold:
+      <input type="number" id="khos-threshold" value="60" min="5" max="660">
+      min
+    </label>
+    <label>
+      <input type="checkbox" id="khos-active-only" checked>
+      On-duty / Driving only
+    </label>
+    <button class="khos-btn" id="khos-refresh">Refresh</button>
+  </div>
+</div>
+
+<div class="khos-status-bar" id="khos-status">Loading…</div>
+
+<div class="khos-legend">
+  <div class="khos-legend-item"><div class="khos-dot dot-critical"></div>&lt; 15 min</div>
+  <div class="khos-legend-item"><div class="khos-dot dot-warning"></div>15 – 30 min</div>
+  <div class="khos-legend-item"><div class="khos-dot dot-caution"></div>30 – 60 min</div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Driver</th>
+      <th>Drive Remaining</th>
+      <th>Shift Remaining</th>
+      <th>Workday Remaining</th>
+      <th>Cycle Remaining</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody id="khos-tbody">
+    <tr><td colspan="6" class="cell-center">Loading…</td></tr>
+  </tbody>
+</table>
+
+<div class="khos-footer" id="khos-footer"></div>
+
+<script>
+geotab.addin.hosApproachingLimit = function(api, state) {
+  var currentApi = api;
+  var timer = null;
+
+  var STATUS_LABELS = {
+    'D':   ['Driving',      'D'],
+    'ON':  ['On Duty',      'ON'],
+    'OFF': ['Off Duty',     'OFF'],
+    'SB':  ['Sleeper',      'SB'],
+    'PC':  ['Pers. Conv.',  'PC'],
+    'YM':  ['Yard Move',    'YM'],
+    'WT':  ['Wait Time',    'WT']
+  };
+
+  function parseTs(ts) {
+    if (!ts) return Infinity;
+    var neg = (ts.charAt(0) === '-');
+    if (neg) ts = ts.substring(1);
+    var p = ts.split(':');
+    var s = parseInt(p[0], 10) * 3600 + parseInt(p[1], 10) * 60 + parseFloat(p[2] || 0);
+    return neg ? -s : s;
+  }
+
+  function fmtTime(secs) {
+    if (!isFinite(secs) || secs <= 0) return '<span class="exceeded">EXCEEDED</span>';
+    var h = Math.floor(secs / 3600);
+    var m = Math.floor((secs % 3600) / 60);
+    return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+  }
+
+  function rowCls(secs) {
+    if (secs <= 0 || secs < 15 * 60) return 'critical';
+    if (secs < 30 * 60) return 'warning';
+    return 'caution';
+  }
+
+  function badge(code) {
+    var entry = STATUS_LABELS[code];
+    if (entry) {
+      return '<span class="badge badge-' + entry[1] + '">' + entry[0] + '</span>';
+    }
+    return '<span class="badge badge-NA">' + (code || '—') + '</span>';
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function setStatus(msg, isErr) {
+    var el = document.getElementById('khos-status');
+    if (el) { el.textContent = msg; el.className = 'khos-status-bar' + (isErr ? ' error' : ''); }
+  }
+
+  function loadData() {
+    var threshEl = document.getElementById('khos-threshold');
+    var activeEl = document.getElementById('khos-active-only');
+    var threshMins = threshEl ? (parseInt(threshEl.value, 10) || 60) : 60;
+    var threshSecs = threshMins * 60;
+    var activeOnly = activeEl ? activeEl.checked : true;
+    var tbody = document.getElementById('khos-tbody');
+
+    setStatus('Loading HOS data…');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="cell-center">Loading…</td></tr>';
+
+    currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
+      var filtered = (avails || []).filter(function(a) {
+        var s = parseTs(a.Driving);
+        return s >= 0 && s < threshSecs;
+      });
+
+      filtered.sort(function(a, b) { return parseTs(a.Driving) - parseTs(b.Driving); });
+
+      if (filtered.length === 0) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="cell-center">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
+        setStatus('All clear — no drivers within ' + threshMins + '-min threshold. Updated: ' + new Date().toLocaleTimeString());
+        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
+        return;
+      }
+
+      // Batch fetch: User + DutyStatusLog (last 24h) per filtered driver
+      var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      var calls = [];
+      filtered.forEach(function(a) {
+        calls.push(['Get', { typeName: 'User', search: { id: a.Driver.id } }]);
+        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.Driver.id }, fromDate: since } }]);
+      });
+
+      currentApi.multiCall(calls, function(results) {
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        var shown = 0;
+
+        filtered.forEach(function(a, i) {
+          var userArr = results[i * 2] || [];
+          var logArr  = results[i * 2 + 1] || [];
+          var user = Array.isArray(userArr) ? userArr[0] : userArr;
+
+          // Most recent duty status log
+          var driveLogs = logArr.filter(function(l) {
+            var t = l.Status;
+            return t === 'D' || t === 'ON' || t === 'OFF' || t === 'SB' || t === 'PC' || t === 'YM' || t === 'WT';
+          });
+          driveLogs.sort(function(x, y) { return new Date(y.DateTime || 0) - new Date(x.DateTime || 0); });
+          var code = driveLogs[0] ? driveLogs[0].Status : null;
+
+          if (activeOnly && code !== 'D' && code !== 'ON') return;
+
+          shown++;
+          var name = user
+            ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.Driver.id))
+            : esc(a.Driver.id);
+
+          var drive   = parseTs(a.Driving);
+          var duty    = parseTs(a.Duty);
+          var workday = parseTs(a.Workday);
+          var cycle   = parseTs(a.Cycle);
+
+          var tr = document.createElement('tr');
+          tr.className = rowCls(drive);
+          tr.innerHTML =
+            '<td class="col-name">'  + name           + '</td>' +
+            '<td class="col-time col-drive">' + fmtTime(drive)   + '</td>' +
+            '<td class="col-time">'  + fmtTime(duty)    + '</td>' +
+            '<td class="col-time">'  + fmtTime(workday) + '</td>' +
+            '<td class="col-time">'  + fmtTime(cycle)   + '</td>' +
+            '<td>'                   + badge(code)      + '</td>';
+          tbody.appendChild(tr);
+        });
+
+        if (shown === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="cell-center">No on-duty or driving drivers within ' + threshMins + '-min threshold.</td></tr>';
+        }
+
+        setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' within ' + threshMins + ' min of drive limit. Updated: ' + new Date().toLocaleTimeString());
+        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
+
+      }, function(err) {
+        setStatus('Error loading driver details: ' + (err.message || err), true);
+      });
+
+    }, function(err) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="cell-error">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
+      setStatus('Error: ' + (err.message || err), true);
+    });
+  }
+
+  return {
+    initialize: function(freshApi, freshState, cb) {
+      currentApi = freshApi;
+      cb();
+    },
+    focus: function(freshApi) {
+      currentApi = freshApi;
+      document.getElementById('khos-refresh').onclick = loadData;
+      document.getElementById('khos-threshold').onchange = loadData;
+      document.getElementById('khos-active-only').onchange = loadData;
+      loadData();
+      timer = setInterval(loadData, 5 * 60 * 1000);
+    },
+    blur: function() {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+};
+</script>
+</body>
+</html>
