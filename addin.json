@@ -4,10 +4,6 @@
   "version": "1.0",
   "items": [{
     "page": "customPage",
-    "click": {
-      "name": "hosApproachingLimit",
-      "page": "customPage"
-    },
     "menuName": {
       "en": "HOS Approaching Limit"
     },
