@@ -1,6 +1,7 @@
 {
   "name": "HOS Approaching Limit",
   "supportEmail": "kunalarora@geotab.com",
+  "version": "1.0",
   "items": [{
     "page": "customPage",
     "click": {
