@@ -1,0 +1,15 @@
+{
+  "name": "HOS Approaching Limit",
+  "supportEmail": "kunalarora@geotab.com",
+  "items": [{
+    "page": "customPage",
+    "click": {
+      "name": "hosApproachingLimit",
+      "page": "customPage"
+    },
+    "menuName": {
+      "en": "HOS Approaching Limit"
+    },
+    "url": "https://kunalarora17.github.io/knx-hos-addin/"
+  }]
+}
