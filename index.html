@@ -243,7 +243,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         return;
       }
 
-      var since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       var calls = [];
       filtered.forEach(function(a) {
         calls.push(['Get', { typeName: 'User', search: { id: a.Driver.id } }]);
