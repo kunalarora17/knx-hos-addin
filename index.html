@@ -165,7 +165,14 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var neg = ts.charAt(0) === '-';
     if (neg) ts = ts.substring(1);
     var p = ts.split(':');
-    var s = parseInt(p[0], 10) * 3600 + parseInt(p[1], 10) * 60 + parseFloat(p[2] || 0);
+    var s;
+    if (p.length === 4) {
+      // D:HH:MM:SS format
+      s = parseInt(p[0], 10) * 86400 + parseInt(p[1], 10) * 3600 + parseInt(p[2], 10) * 60 + parseFloat(p[3] || 0);
+    } else {
+      // HH:MM:SS format
+      s = parseInt(p[0], 10) * 3600 + parseInt(p[1], 10) * 60 + parseFloat(p[2] || 0);
+    }
     return neg ? -s : s;
   }
 
