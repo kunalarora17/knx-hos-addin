@@ -222,6 +222,8 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     setCounts('—', '—', '—');
 
     currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
+      console.log('[KNX HOS] DutyStatusAvailability raw count:', (avails||[]).length);
+      console.log('[KNX HOS] raw avails:', JSON.stringify(avails || []));
       var filtered = (avails || []).filter(function(a) {
         var s = parseTs(a.Driving);
         return s >= 0 && s < threshSecs;
