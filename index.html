@@ -234,8 +234,9 @@ geotab.addin.hosApproachingLimit = function(api, state) {
 
     currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
       var filtered = (avails || []).filter(function(a) {
-        var s = parseTs(a.driving);
-        return s > 0 && s < threshSecs;
+        var drive = parseTs(a.driving);
+        var duty  = parseTs(a.duty);
+        return drive > 0 && drive < threshSecs && duty > 0;
       });
 
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
