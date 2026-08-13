@@ -222,22 +222,16 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     setCounts('—', '—', '—');
 
     currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
-      console.log('[KNX HOS] DutyStatusAvailability raw count:', (avails||[]).length);
-      console.log('[KNX HOS] raw avails:', JSON.stringify(avails || []));
-      var allDrivers = (avails || []).map(function(a) { return { id: a.driver && a.driver.id, driving: a.driving }; });
-      allDrivers.sort(function(a,b){ return parseTs(a.driving)-parseTs(b.driving); });
-      var firstRecord = (avails && avails[0]) ? 'keys=' + Object.keys(avails[0]).join(',') + ' | sample=' + JSON.stringify(avails[0]).slice(0,200) : 'no records';
-      var debugRows = firstRecord;
       var filtered = (avails || []).filter(function(a) {
         var s = parseTs(a.driving);
-        return s >= 0 && s < threshSecs;
+        return s > 0 && s < threshSecs;
       });
 
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
       if (filtered.length === 0) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
-        setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString() + ' | DEBUG: ' + (avails||[]).length + ' total records, lowest 5: ' + debugRows);
+        setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
         setCounts(0, 0, 0);
         var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
         return;
