@@ -224,15 +224,15 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
       console.log('[KNX HOS] DutyStatusAvailability raw count:', (avails||[]).length);
       console.log('[KNX HOS] raw avails:', JSON.stringify(avails || []));
-      var allDrivers = (avails || []).map(function(a) { return { id: a.Driver && a.Driver.id, driving: a.Driving }; });
+      var allDrivers = (avails || []).map(function(a) { return { id: a.driver && a.driver.id, driving: a.driving }; });
       allDrivers.sort(function(a,b){ return parseTs(a.driving)-parseTs(b.driving); });
       var debugRows = allDrivers.slice(0,5).map(function(a){ return a.id + '=' + (a.driving||'null'); }).join(', ');
       var filtered = (avails || []).filter(function(a) {
-        var s = parseTs(a.Driving);
+        var s = parseTs(a.driving);
         return s >= 0 && s < threshSecs;
       });
 
-      filtered.sort(function(a, b) { return parseTs(a.Driving) - parseTs(b.Driving); });
+      filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
       if (filtered.length === 0) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
@@ -245,8 +245,8 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       var calls = [];
       filtered.forEach(function(a) {
-        calls.push(['Get', { typeName: 'User', search: { id: a.Driver.id } }]);
-        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.Driver.id }, fromDate: since } }]);
+        calls.push(['Get', { typeName: 'User', search: { id: a.driver.id } }]);
+        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since } }]);
       });
 
       currentApi.multiCall(calls, function(results) {
@@ -267,15 +267,15 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           var code = logs[0] ? logs[0].Status : null;
 
           shown++;
-          var drive = parseTs(a.Driving);
+          var drive = parseTs(a.driving);
           var sev   = severity(drive);
           if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
 
-          var duty  = parseTs(a.Duty);
-          var cycle = parseTs(a.Cycle);
+          var duty  = parseTs(a.duty);
+          var cycle = parseTs(a.cycle);
           var name  = user
-            ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.Driver.id))
-            : esc(a.Driver.id);
+            ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
+            : esc(a.driver.id);
 
           var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
           var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
