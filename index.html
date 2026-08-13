@@ -20,11 +20,7 @@
         <input type="number" id="khos-threshold" value="60" min="5" max="660">
         min
       </div>
-      <label class="toggle">
-        <input type="checkbox" id="khos-active-only" checked>
-        Active drivers only
-      </label>
-      <button class="btn" id="khos-refresh">Refresh</button>
+<button class="btn" id="khos-refresh">Refresh</button>
     </div>
   </div>
 
@@ -217,10 +213,8 @@ geotab.addin.hosApproachingLimit = function(api, state) {
 
   function loadData() {
     var threshEl  = document.getElementById('khos-threshold');
-    var activeEl  = document.getElementById('khos-active-only');
     var threshMins = threshEl ? (parseInt(threshEl.value, 10) || 60) : 60;
     var threshSecs = threshMins * 60;
-    var activeOnly = activeEl ? activeEl.checked : true;
     var tbody = document.getElementById('khos-tbody');
 
     setStatus('Loading HOS data…');
@@ -266,8 +260,6 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           });
           logs.sort(function(x, y) { return new Date(y.DateTime||0) - new Date(x.DateTime||0); });
           var code = logs[0] ? logs[0].Status : null;
-
-          if (activeOnly && code !== 'D' && code !== 'ON') return;
 
           shown++;
           var drive = parseTs(a.Driving);
@@ -320,7 +312,6 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       currentApi = freshApi;
       document.getElementById('khos-refresh').onclick = loadData;
       document.getElementById('khos-threshold').onchange = loadData;
-      document.getElementById('khos-active-only').onchange = loadData;
       loadData();
       timer = setInterval(loadData, 5 * 60 * 1000);
     },
