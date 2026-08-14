@@ -30,21 +30,21 @@
       <div class="scard-count" id="cnt-critical">—</div>
       <div>
         <div class="scard-label">Critical</div>
-        <div class="scard-range">&lt; 2h cycle remaining</div>
+        <div class="scard-range">&lt; 15 min drive remaining</div>
       </div>
     </div>
     <div class="scard scard-orange" id="scard-warning">
       <div class="scard-count" id="cnt-warning">—</div>
       <div>
         <div class="scard-label">Warning</div>
-        <div class="scard-range">2 – 8h cycle remaining</div>
+        <div class="scard-range">15 – 30 min drive remaining</div>
       </div>
     </div>
     <div class="scard scard-yellow" id="scard-caution">
       <div class="scard-count" id="cnt-caution">—</div>
       <div>
         <div class="scard-label">Caution</div>
-        <div class="scard-range">&gt; 8h cycle remaining</div>
+        <div class="scard-range">30 – 60 min drive remaining</div>
       </div>
     </div>
   </div>
@@ -188,9 +188,9 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
   }
 
-  function severity(cycleSecs) {
-    if (cycleSecs < 2 * 3600) return 'critical';
-    if (cycleSecs < 8 * 3600) return 'warning';
+  function severity(driveSecs) {
+    if (driveSecs < 15 * 60) return 'critical';
+    if (driveSecs < 30 * 60) return 'warning';
     return 'caution';
   }
 
@@ -279,7 +279,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           shown++;
           var drive = parseTs(a.driving);
           var cycle = parseTs(a.cycle);
-          var sev   = severity(cycle);
+          var sev   = severity(drive);
           if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
           var name  = user
             ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
