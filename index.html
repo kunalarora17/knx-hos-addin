@@ -30,21 +30,21 @@
       <div class="scard-count" id="cnt-critical">—</div>
       <div>
         <div class="scard-label">Critical</div>
-        <div class="scard-range">&lt; 15 min remaining</div>
+        <div class="scard-range">&lt; 2h cycle remaining</div>
       </div>
     </div>
     <div class="scard scard-orange" id="scard-warning">
       <div class="scard-count" id="cnt-warning">—</div>
       <div>
         <div class="scard-label">Warning</div>
-        <div class="scard-range">15 – 30 min remaining</div>
+        <div class="scard-range">2 – 8h cycle remaining</div>
       </div>
     </div>
     <div class="scard scard-yellow" id="scard-caution">
       <div class="scard-count" id="cnt-caution">—</div>
       <div>
         <div class="scard-label">Caution</div>
-        <div class="scard-range">30 – 60 min remaining</div>
+        <div class="scard-range">&gt; 8h cycle remaining</div>
       </div>
     </div>
   </div>
@@ -60,13 +60,12 @@
           <th>Severity</th>
           <th>Driver</th>
           <th>Drive Remaining</th>
-          <th>Shift Remaining</th>
           <th>Cycle Remaining</th>
           <th>Status</th>
         </tr>
       </thead>
       <tbody id="khos-tbody">
-        <tr><td colspan="6" class="msg-cell">Loading…</td></tr>
+        <tr><td colspan="5" class="msg-cell">Loading…</td></tr>
       </tbody>
     </table>
   </div>
@@ -187,9 +186,9 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
   }
 
-  function severity(secs) {
-    if (secs <= 0 || secs < 15 * 60) return 'critical';
-    if (secs < 30 * 60) return 'warning';
+  function severity(cycleSecs) {
+    if (cycleSecs < 2 * 3600) return 'critical';
+    if (cycleSecs < 8 * 3600) return 'warning';
     return 'caution';
   }
 
@@ -229,7 +228,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var tbody = document.getElementById('khos-tbody');
 
     setStatus('Loading HOS data…');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">Loading…</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
     currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
@@ -239,10 +238,10 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         return drive > 0 && drive < threshSecs && duty > 0;
       });
 
-      filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
+      filtered.sort(function(a, b) { return parseTs(a.cycle) - parseTs(b.cycle); });
 
       if (filtered.length === 0) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
         setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
         setCounts(0, 0, 0);
         var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
@@ -273,13 +272,13 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           logs.sort(function(x, y) { return new Date(y.dateTime||0) - new Date(x.dateTime||0); });
           var code = logs[0] ? logs[0].status : null;
 
+          if (code !== 'D' && code !== 'ON') return;
+
           shown++;
           var drive = parseTs(a.driving);
-          var sev   = severity(drive);
-          if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
-
-          var duty  = parseTs(a.duty);
           var cycle = parseTs(a.cycle);
+          var sev   = severity(cycle);
+          if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
           var name  = user
             ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
             : esc(a.driver.id);
@@ -295,7 +294,6 @@ geotab.addin.hosApproachingLimit = function(api, state) {
             '<td>' + pill(sev) + '</td>' +
             '<td class="dname">' + name + '</td>' +
             '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
-            '<td class="tcell">' + fmtTime(duty)  + '</td>' +
             '<td class="tcell">' + fmtTime(cycle) + '</td>' +
             '<td>' + statusBadge(code) + '</td>';
           tbody.appendChild(tr);
@@ -304,7 +302,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         setCounts(nC, nW, nU);
 
         if (shown === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
         }
 
         setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
@@ -315,7 +313,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       });
 
     }, function(err) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
       setStatus('Error: ' + (err.message || err), true);
     });
   }
