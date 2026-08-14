@@ -122,6 +122,7 @@
     '.pill-warning { background: #fed7aa !important; color: #9a3412 !important; }',
     '.pill-caution { background: #fef08a !important; color: #854d0e !important; }',
     '.dname { font-weight: 600 !important; font-size: 14px !important; color: #0f172a !important; }',
+    '.driver-code { font-size: 11px !important; color: #94a3b8 !important; font-weight: 500 !important; margin-top: 2px; font-variant-numeric: tabular-nums; }',
     '.drive-val { font-size: 20px !important; font-weight: 800 !important; letter-spacing: -0.5px; line-height: 1.1; }',
     '.row-critical .drive-val { color: #dc2626 !important; }',
     '.row-warning .drive-val { color: #ea580c !important; }',
@@ -294,7 +295,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           if (activeFilter && activeFilter !== sev) tr.style.display = 'none';
           tr.innerHTML =
             '<td>' + pill(sev) + '</td>' +
-            '<td class="dname">' + name + '</td>' +
+            '<td class="dname">' + name + (user && user.employeeNo ? '<div class="driver-code">' + esc(user.employeeNo) + '</div>' : '') + '</td>' +
             '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
             '<td class="tcell">' + fmtTime(cycle) + '</td>' +
             '<td>' + statusBadge(code) + '</td>';
@@ -309,7 +310,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
 
         setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
         clearInterval(countdown);
-        var nextAt = Date.now() + 5 * 60 * 1000;
+        var nextAt = Date.now() + 10 * 60 * 1000;
         countdown = setInterval(function() {
           var rem = Math.max(0, nextAt - Date.now());
           var m = Math.floor(rem / 60000);
@@ -353,7 +354,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         if (card) card.onclick = function() { filterRows(activeFilter === sev ? null : sev); };
       });
       loadData();
-      timer = setInterval(loadData, 5 * 60 * 1000);
+      timer = setInterval(loadData, 10 * 60 * 1000);
     },
     blur: function() { clearInterval(timer); timer = null; clearInterval(countdown); countdown = null; }
   };
