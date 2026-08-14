@@ -151,6 +151,7 @@
 geotab.addin.hosApproachingLimit = function(api, state) {
   var currentApi = api;
   var timer = null;
+  var countdown = null;
   var activeFilter = null;
 
   var STATUS_LABELS = {
@@ -183,6 +184,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     if (!isFinite(secs) || secs <= 0) return '<span class="exceeded">EXCEEDED</span>';
     var h = Math.floor(secs / 3600);
     var m = Math.floor((secs % 3600) / 60);
+    if (h === 0) return m + ' min';
     return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
   }
 
@@ -238,7 +240,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         return drive > 0 && drive < threshSecs && duty > 0;
       });
 
-      filtered.sort(function(a, b) { return parseTs(a.cycle) - parseTs(b.cycle); });
+      filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
       if (filtered.length === 0) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
@@ -306,7 +308,15 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         }
 
         setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
-        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
+        clearInterval(countdown);
+        var nextAt = Date.now() + 5 * 60 * 1000;
+        countdown = setInterval(function() {
+          var rem = Math.max(0, nextAt - Date.now());
+          var m = Math.floor(rem / 60000);
+          var s = Math.floor((rem % 60000) / 1000);
+          var f = document.getElementById('khos-footer');
+          if (f) f.textContent = 'Next refresh in ' + m + ':' + (s < 10 ? '0' : '') + s;
+        }, 1000);
 
       }, function(err) {
         setStatus('Error loading driver details: ' + (err.message || err), true);
@@ -345,7 +355,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       loadData();
       timer = setInterval(loadData, 5 * 60 * 1000);
     },
-    blur: function() { clearInterval(timer); timer = null; }
+    blur: function() { clearInterval(timer); timer = null; clearInterval(countdown); countdown = null; }
   };
 };
 </script>
