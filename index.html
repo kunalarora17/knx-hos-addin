@@ -243,13 +243,26 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    var groups = currentState ? currentState.getGroupFilter() : [];
-    var search = (groups && groups.length) ? { userSearch: { groups: groups } } : {};
-    currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: search }, function(avails) {
-      var filtered = (avails || []).filter(function(a) {
+    var groups = currentState ? (currentState.getGroupFilter() || []) : [];
+    var initialCalls = [['Get', { typeName: 'DutyStatusAvailability' }]];
+    if (groups.length) {
+      initialCalls.push(['Get', { typeName: 'User', search: { groups: groups } }]);
+    }
+
+    currentApi.multiCall(initialCalls, function(initialResults) {
+      var avails = initialResults[0] || [];
+      var allowedIds = null;
+      if (groups.length && initialResults[1]) {
+        allowedIds = {};
+        (initialResults[1] || []).forEach(function(u) { allowedIds[u.id] = true; });
+      }
+
+      var filtered = avails.filter(function(a) {
         var drive = parseTs(a.driving);
         var duty  = parseTs(a.duty);
-        return drive > 0 && drive < threshSecs && duty > 0;
+        if (!(drive > 0 && drive < threshSecs && duty > 0)) return false;
+        if (allowedIds && !allowedIds[a.driver.id]) return false;
+        return true;
       });
 
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
