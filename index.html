@@ -163,6 +163,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
   var timer = null;
   var countdown = null;
   var activeFilter = null;
+  var nameCache = {};
 
   var STATUS_LABELS = {
     'D':   ['Driving',     'D'],
@@ -238,15 +239,14 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var threshMins = threshEl ? (parseInt(threshEl.value, 10) || 60) : 60;
     var threshSecs = threshMins * 60;
     var tbody = document.getElementById('khos-tbody');
-
-    setStatus('Loading HOS data…');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
-    setCounts('—', '—', '—');
-
     var groups = currentState ? (currentState.getGroupFilter() || []) : [];
     var allowedGroupIds = {};
     groups.forEach(function(g) { if (g && g.id) allowedGroupIds[g.id] = true; });
     var hasGroupFilter = groups.length > 0;
+
+    setStatus('Loading HOS data…');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
+    setCounts('—', '—', '—');
 
     currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
       var filtered = (avails || []).filter(function(a) {
@@ -254,7 +254,6 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         var duty  = parseTs(a.duty);
         return drive > 0 && drive < threshSecs && duty > 0;
       });
-
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
       if (filtered.length === 0) {
@@ -265,6 +264,32 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         return;
       }
 
+      // Phase 1 — render immediately using any cached names; status TBD
+      if (tbody) {
+        tbody.innerHTML = '';
+        filtered.forEach(function(a) {
+          var drive = parseTs(a.driving);
+          var cycle = parseTs(a.cycle);
+          var sev   = severity(drive);
+          var pct   = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
+          var bar   = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
+          var name  = nameCache[a.driver.id] || '<span style="color:#94a3b8;font-size:11px">' + esc(a.driver.id) + '</span>';
+          var tr    = document.createElement('tr');
+          tr.className = 'row-' + sev;
+          tr.dataset.sev = sev;
+          if (activeFilter && activeFilter !== sev) tr.style.display = 'none';
+          tr.innerHTML =
+            '<td>' + pill(sev) + '</td>' +
+            '<td class="dname">' + name + '</td>' +
+            '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
+            '<td class="tcell">' + fmtTime(cycle) + '</td>' +
+            '<td><span class="sbadge sb-NA">—</span></td>';
+          tbody.appendChild(tr);
+        });
+      }
+      setStatus('Loading driver details… (' + filtered.length + ' drivers)');
+
+      // Phase 2 — fetch names + status, re-render with D/ON filter applied
       var since = new Date(Date.now() - 14 * 60 * 60 * 1000).toISOString();
       var calls = [];
       filtered.forEach(function(a) {
@@ -305,10 +330,10 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           var name  = user
             ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
             : esc(a.driver.id);
+          if (user && name && name !== esc(a.driver.id)) nameCache[a.driver.id] = name;
 
           var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
           var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
-
           var tr = document.createElement('tr');
           tr.className = 'row-' + sev;
           tr.dataset.sev = sev;
@@ -323,11 +348,9 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         });
 
         setCounts(nC, nW, nU);
-
         if (shown === 0) {
           tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
         }
-
         setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
         clearInterval(countdown);
         var nextAt = Date.now() + 10 * 60 * 1000;
