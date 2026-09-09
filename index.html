@@ -241,8 +241,11 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var tbody = document.getElementById('khos-tbody');
     var groups = currentState ? (currentState.getGroupFilter() || []) : [];
     var allowedGroupIds = {};
-    groups.forEach(function(g) { if (g && g.id) allowedGroupIds[g.id] = true; });
-    var hasGroupFilter = groups.length > 0;
+    groups.forEach(function(g) {
+      // GroupCompanyId is the root "All groups" sentinel — not a real filter
+      if (g && g.id && g.id !== 'GroupCompanyId') allowedGroupIds[g.id] = true;
+    });
+    var hasGroupFilter = Object.keys(allowedGroupIds).length > 0;
 
     setStatus('Loading HOS data…');
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
