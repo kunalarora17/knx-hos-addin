@@ -252,100 +252,113 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
-      var filtered = (avails || []).filter(function(a) {
-        var drive = parseTs(a.driving);
-        var duty  = parseTs(a.duty);
-        return drive > 0 && drive < threshSecs && duty > 0;
-      });
-      filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
-
-      if (filtered.length === 0) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
-        setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
-        setCounts(0, 0, 0);
-        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
-        return;
-      }
-
-      var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      var calls = [];
-      filtered.forEach(function(a) {
-        calls.push(['Get', { typeName: 'User', search: { id: a.driver.id } }]);
-        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since } }]);
-      });
-
-      currentApi.multiCall(calls, function(results) {
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        var shown = 0, nC = 0, nW = 0, nU = 0;
-
-        filtered.forEach(function(a, i) {
-          var userArr = results[i * 2] || [];
-          var logArr  = results[i * 2 + 1] || [];
-          var user = Array.isArray(userArr) ? userArr[0] : userArr;
-
-          var logs = logArr.filter(function(l) {
-            var t = l.status;
-            return t==='D'||t==='ON'||t==='OFF'||t==='SB'||t==='PC'||t==='YM'||t==='WT';
-          });
-          logs.sort(function(x, y) { return new Date(y.dateTime||0) - new Date(x.dateTime||0); });
-          var code = logs[0] ? logs[0].status : null;
-
-          if (code !== 'D' && code !== 'ON') return;
-
-          if (hasGroupFilter) {
-            if (!user) return;
-            var inGroup = (user.groups || []).some(function(g) { return allowedGroupIds[g.id]; });
-            if (!inGroup) return;
-          }
-
-          shown++;
+    // allowedDriverIds is null (no filter) or a set of driver user IDs resolved server-side
+    function fetchHos(allowedDriverIds) {
+      currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
+        var filtered = (avails || []).filter(function(a) {
           var drive = parseTs(a.driving);
-          var cycle = parseTs(a.cycle);
-          var sev   = severity(drive);
-          if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
-          var name  = user
-            ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
-            : esc(a.driver.id);
-          var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
-          var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
-          var tr = document.createElement('tr');
-          tr.className = 'row-' + sev;
-          tr.dataset.sev = sev;
-          if (activeFilter && activeFilter !== sev) tr.style.display = 'none';
-          tr.innerHTML =
-            '<td>' + pill(sev) + '</td>' +
-            '<td class="dname">' + name + (user && user.employeeNo ? '<div class="driver-code">' + esc(user.employeeNo) + '</div>' : '') + '</td>' +
-            '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
-            '<td class="tcell">' + fmtTime(cycle) + '</td>' +
-            '<td>' + statusBadge(code) + '</td>';
-          tbody.appendChild(tr);
+          var duty  = parseTs(a.duty);
+          if (!(drive > 0 && drive < threshSecs && duty > 0)) return false;
+          if (allowedDriverIds && !allowedDriverIds[a.driver.id]) return false;
+          return true;
+        });
+        filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
+
+        if (filtered.length === 0) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
+          setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
+          setCounts(0, 0, 0);
+          var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
+          return;
+        }
+
+        var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        var calls = [];
+        filtered.forEach(function(a) {
+          calls.push(['Get', { typeName: 'User', search: { id: a.driver.id } }]);
+          calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since } }]);
         });
 
-        setCounts(nC, nW, nU);
-        if (shown === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
-        }
-        setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
-        clearInterval(countdown);
-        var nextAt = Date.now() + 10 * 60 * 1000;
-        countdown = setInterval(function() {
-          var rem = Math.max(0, nextAt - Date.now());
-          var m = Math.floor(rem / 60000);
-          var s = Math.floor((rem % 60000) / 1000);
-          var f = document.getElementById('khos-footer');
-          if (f) f.textContent = 'Next refresh in ' + m + ':' + (s < 10 ? '0' : '') + s;
-        }, 1000);
+        currentApi.multiCall(calls, function(results) {
+          if (!tbody) return;
+          tbody.innerHTML = '';
+          var shown = 0, nC = 0, nW = 0, nU = 0;
+
+          filtered.forEach(function(a, i) {
+            var userArr = results[i * 2] || [];
+            var logArr  = results[i * 2 + 1] || [];
+            var user = Array.isArray(userArr) ? userArr[0] : userArr;
+
+            var logs = logArr.filter(function(l) {
+              var t = l.status;
+              return t==='D'||t==='ON'||t==='OFF'||t==='SB'||t==='PC'||t==='YM'||t==='WT';
+            });
+            logs.sort(function(x, y) { return new Date(y.dateTime||0) - new Date(x.dateTime||0); });
+            var code = logs[0] ? logs[0].status : null;
+
+            if (code !== 'D' && code !== 'ON') return;
+
+            shown++;
+            var drive = parseTs(a.driving);
+            var cycle = parseTs(a.cycle);
+            var sev   = severity(drive);
+            if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
+            var name  = user
+              ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
+              : esc(a.driver.id);
+            var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
+            var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
+            var tr = document.createElement('tr');
+            tr.className = 'row-' + sev;
+            tr.dataset.sev = sev;
+            if (activeFilter && activeFilter !== sev) tr.style.display = 'none';
+            tr.innerHTML =
+              '<td>' + pill(sev) + '</td>' +
+              '<td class="dname">' + name + (user && user.employeeNo ? '<div class="driver-code">' + esc(user.employeeNo) + '</div>' : '') + '</td>' +
+              '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
+              '<td class="tcell">' + fmtTime(cycle) + '</td>' +
+              '<td>' + statusBadge(code) + '</td>';
+            tbody.appendChild(tr);
+          });
+
+          setCounts(nC, nW, nU);
+          if (shown === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
+          }
+          setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
+          clearInterval(countdown);
+          var nextAt = Date.now() + 10 * 60 * 1000;
+          countdown = setInterval(function() {
+            var rem = Math.max(0, nextAt - Date.now());
+            var m = Math.floor(rem / 60000);
+            var s = Math.floor((rem % 60000) / 1000);
+            var f = document.getElementById('khos-footer');
+            if (f) f.textContent = 'Next refresh in ' + m + ':' + (s < 10 ? '0' : '') + s;
+          }, 1000);
+
+        }, function(err) {
+          setStatus('Error loading driver details: ' + (err.message || err), true);
+        });
 
       }, function(err) {
-        setStatus('Error loading driver details: ' + (err.message || err), true);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
+        setStatus('Error: ' + (err.message || err), true);
       });
+    }
 
-    }, function(err) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
-      setStatus('Error: ' + (err.message || err), true);
-    });
+    if (hasGroupFilter) {
+      // Resolve group membership server-side — handles full group hierarchy (child groups included)
+      var groupSearch = Object.keys(allowedGroupIds).map(function(id) { return { id: id }; });
+      currentApi.call('Get', { typeName: 'User', search: { groups: groupSearch } }, function(users) {
+        var allowedDriverIds = {};
+        (users || []).forEach(function(u) { if (u.id) allowedDriverIds[u.id] = true; });
+        fetchHos(allowedDriverIds);
+      }, function(err) {
+        setStatus('Error resolving group members: ' + (err.message || err), true);
+      });
+    } else {
+      fetchHos(null);
+    }
   }
 
   function filterRows(sev) {
