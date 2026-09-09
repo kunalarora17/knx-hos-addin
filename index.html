@@ -264,37 +264,11 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         return;
       }
 
-      // Phase 1 — render immediately using any cached names; status TBD
-      if (tbody) {
-        tbody.innerHTML = '';
-        filtered.forEach(function(a) {
-          var drive = parseTs(a.driving);
-          var cycle = parseTs(a.cycle);
-          var sev   = severity(drive);
-          var pct   = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
-          var bar   = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
-          var name  = nameCache[a.driver.id] || '<span style="color:#94a3b8;font-size:11px">' + esc(a.driver.id) + '</span>';
-          var tr    = document.createElement('tr');
-          tr.className = 'row-' + sev;
-          tr.dataset.sev = sev;
-          if (activeFilter && activeFilter !== sev) tr.style.display = 'none';
-          tr.innerHTML =
-            '<td>' + pill(sev) + '</td>' +
-            '<td class="dname">' + name + '</td>' +
-            '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
-            '<td class="tcell">' + fmtTime(cycle) + '</td>' +
-            '<td><span class="sbadge sb-NA">—</span></td>';
-          tbody.appendChild(tr);
-        });
-      }
-      setStatus('Loading driver details… (' + filtered.length + ' drivers)');
-
-      // Phase 2 — fetch names + status, re-render with D/ON filter applied
-      var since = new Date(Date.now() - 14 * 60 * 60 * 1000).toISOString();
+      var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       var calls = [];
       filtered.forEach(function(a) {
         calls.push(['Get', { typeName: 'User', search: { id: a.driver.id } }]);
-        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since }, resultsLimit: 100 }]);
+        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since } }]);
       });
 
       currentApi.multiCall(calls, function(results) {
@@ -330,8 +304,6 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           var name  = user
             ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
             : esc(a.driver.id);
-          if (user && name && name !== esc(a.driver.id)) nameCache[a.driver.id] = name;
-
           var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
           var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
           var tr = document.createElement('tr');
