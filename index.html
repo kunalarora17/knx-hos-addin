@@ -252,15 +252,13 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    // allowedDriverIds is null (no filter) or a set of driver user IDs resolved server-side
-    function fetchHos(allowedDriverIds) {
+    // expandedGroupIds: null = no filter; object = set of group IDs (selected + all descendants)
+    function fetchHos(expandedGroupIds) {
       currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
         var filtered = (avails || []).filter(function(a) {
           var drive = parseTs(a.driving);
           var duty  = parseTs(a.duty);
-          if (!(drive > 0 && drive < threshSecs && duty > 0)) return false;
-          if (allowedDriverIds && !allowedDriverIds[a.driver.id]) return false;
-          return true;
+          return drive > 0 && drive < threshSecs && duty > 0;
         });
         filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
@@ -297,6 +295,13 @@ geotab.addin.hosApproachingLimit = function(api, state) {
             var code = logs[0] ? logs[0].status : null;
 
             if (code !== 'D' && code !== 'ON') return;
+
+            // Group filter: check direct membership against expanded set (selected groups + all descendants)
+            if (expandedGroupIds) {
+              if (!user) return;
+              var inGroup = (user.groups || []).some(function(g) { return expandedGroupIds[g.id]; });
+              if (!inGroup) return;
+            }
 
             shown++;
             var drive = parseTs(a.driving);
@@ -347,14 +352,26 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     }
 
     if (hasGroupFilter) {
-      // Resolve group membership server-side — handles full group hierarchy (child groups included)
-      var groupSearch = Object.keys(allowedGroupIds).map(function(id) { return { id: id }; });
-      currentApi.call('Get', { typeName: 'User', search: { groups: groupSearch } }, function(users) {
-        var allowedDriverIds = {};
-        (users || []).forEach(function(u) { if (u.id) allowedDriverIds[u.id] = true; });
-        fetchHos(allowedDriverIds);
+      // Fetch the full group tree and expand selected IDs to include all descendants.
+      // Get User search.groups filters by data access scope, not membership — unreliable for this use case.
+      // Instead we expand the group hierarchy client-side and check user.groups direct membership in the render loop.
+      currentApi.call('Get', { typeName: 'Group' }, function(allGroups) {
+        var childrenOf = {};
+        (allGroups || []).forEach(function(g) {
+          if (g.parent && g.parent.id) {
+            if (!childrenOf[g.parent.id]) childrenOf[g.parent.id] = [];
+            childrenOf[g.parent.id].push(g.id);
+          }
+        });
+        var expandedGroupIds = {};
+        function collect(id) {
+          expandedGroupIds[id] = true;
+          (childrenOf[id] || []).forEach(collect);
+        }
+        Object.keys(allowedGroupIds).forEach(collect);
+        fetchHos(expandedGroupIds);
       }, function(err) {
-        setStatus('Error resolving group members: ' + (err.message || err), true);
+        setStatus('Error loading group hierarchy: ' + (err.message || err), true);
       });
     } else {
       fetchHos(null);
