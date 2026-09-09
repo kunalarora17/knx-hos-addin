@@ -165,6 +165,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
   var activeFilter = null;
   var loadDebounce = null;
   var groupChangeHandler = null;
+  var groupTreeCache = null; // childrenOf map cached for session, cleared on blur
 
   var STATUS_LABELS = {
     'D':   ['Driving',     'D'],
@@ -351,10 +352,24 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       });
     }
 
-    if (hasGroupFilter) {
-      // Fetch the full group tree and expand selected IDs to include all descendants.
-      // Get User search.groups filters by data access scope, not membership — unreliable for this use case.
-      // Instead we expand the group hierarchy client-side and check user.groups direct membership in the render loop.
+    function applyGroupTree(childrenOf) {
+      var expandedGroupIds = {};
+      function collect(id) {
+        expandedGroupIds[id] = true;
+        (childrenOf[id] || []).forEach(collect);
+      }
+      Object.keys(allowedGroupIds).forEach(collect);
+      fetchHos(expandedGroupIds);
+    }
+
+    if (!hasGroupFilter) {
+      fetchHos(null);
+    } else if (groupTreeCache) {
+      applyGroupTree(groupTreeCache);
+    } else {
+      // Fetch group tree once; cache it for the rest of the session so subsequent
+      // filter changes don't re-fetch. Get User search.groups matches data access scope,
+      // not membership, so we expand the hierarchy client-side instead.
       currentApi.call('Get', { typeName: 'Group' }, function(allGroups) {
         var childrenOf = {};
         (allGroups || []).forEach(function(g) {
@@ -363,18 +378,11 @@ geotab.addin.hosApproachingLimit = function(api, state) {
             childrenOf[g.parent.id].push(g.id);
           }
         });
-        var expandedGroupIds = {};
-        function collect(id) {
-          expandedGroupIds[id] = true;
-          (childrenOf[id] || []).forEach(collect);
-        }
-        Object.keys(allowedGroupIds).forEach(collect);
-        fetchHos(expandedGroupIds);
+        groupTreeCache = childrenOf;
+        applyGroupTree(childrenOf);
       }, function(err) {
         setStatus('Error loading group hierarchy: ' + (err.message || err), true);
       });
-    } else {
-      fetchHos(null);
     }
   }
 
@@ -403,12 +411,16 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         var card = document.getElementById('scard-' + sev);
         if (card) card.onclick = function() { filterRows(activeFilter === sev ? null : sev); };
       });
+      var focusTime = Date.now();
       groupChangeHandler = function() {
+        // MyGeotab fires groupFilterChanged immediately on subscribe — ignore that initial fire.
+        // Real user group changes happen well after focus() returns.
+        if (Date.now() - focusTime < 500) return;
         clearTimeout(loadDebounce);
-        loadDebounce = setTimeout(loadData, 50);
+        loadDebounce = setTimeout(loadData, 100);
       };
       if (currentState) currentState.subscribe('groupFilterChanged', groupChangeHandler);
-      groupChangeHandler(); // debounced initial load — collapses with any immediate subscribe fire
+      loadData(); // direct initial load — no debounce delay
       timer = setInterval(loadData, 10 * 60 * 1000);
     },
     blur: function() {
@@ -417,6 +429,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       clearInterval(countdown); countdown = null;
       if (currentState && groupChangeHandler) currentState.unsubscribe('groupFilterChanged', groupChangeHandler);
       groupChangeHandler = null;
+      groupTreeCache = null;
     }
   };
 };
