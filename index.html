@@ -265,11 +265,11 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         return;
       }
 
-      var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      var since = new Date(Date.now() - 14 * 60 * 60 * 1000).toISOString();
       var calls = [];
       filtered.forEach(function(a) {
         calls.push(['Get', { typeName: 'User', search: { id: a.driver.id } }]);
-        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since } }]);
+        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since }, resultsLimit: 100 }]);
       });
 
       currentApi.multiCall(calls, function(results) {
