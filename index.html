@@ -163,7 +163,6 @@ geotab.addin.hosApproachingLimit = function(api, state) {
   var timer = null;
   var countdown = null;
   var activeFilter = null;
-  var nameCache = {};
 
   var STATUS_LABELS = {
     'D':   ['Driving',     'D'],
@@ -372,15 +371,10 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         var card = document.getElementById('scard-' + sev);
         if (card) card.onclick = function() { filterRows(activeFilter === sev ? null : sev); };
       });
-      if (currentState) currentState.subscribe('groupFilterChanged', loadData);
       loadData();
       timer = setInterval(loadData, 10 * 60 * 1000);
     },
-    blur: function() {
-      clearInterval(timer); timer = null;
-      clearInterval(countdown); countdown = null;
-      if (currentState) currentState.unsubscribe('groupFilterChanged', loadData);
-    }
+    blur: function() { clearInterval(timer); timer = null; clearInterval(countdown); countdown = null; }
   };
 };
 </script>
