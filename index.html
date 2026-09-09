@@ -244,25 +244,15 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     setCounts('—', '—', '—');
 
     var groups = currentState ? (currentState.getGroupFilter() || []) : [];
-    var initialCalls = [['Get', { typeName: 'DutyStatusAvailability' }]];
-    if (groups.length) {
-      initialCalls.push(['Get', { typeName: 'User', search: { groups: groups } }]);
-    }
+    var allowedGroupIds = {};
+    groups.forEach(function(g) { if (g && g.id) allowedGroupIds[g.id] = true; });
+    var hasGroupFilter = groups.length > 0;
 
-    currentApi.multiCall(initialCalls, function(initialResults) {
-      var avails = initialResults[0] || [];
-      var allowedIds = null;
-      if (groups.length && initialResults[1]) {
-        allowedIds = {};
-        (initialResults[1] || []).forEach(function(u) { allowedIds[u.id] = true; });
-      }
-
-      var filtered = avails.filter(function(a) {
+    currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
+      var filtered = (avails || []).filter(function(a) {
         var drive = parseTs(a.driving);
         var duty  = parseTs(a.duty);
-        if (!(drive > 0 && drive < threshSecs && duty > 0)) return false;
-        if (allowedIds && !allowedIds[a.driver.id]) return false;
-        return true;
+        return drive > 0 && drive < threshSecs && duty > 0;
       });
 
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
@@ -300,6 +290,12 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           var code = logs[0] ? logs[0].status : null;
 
           if (code !== 'D' && code !== 'ON') return;
+
+          if (hasGroupFilter) {
+            if (!user) return;
+            var inGroup = (user.groups || []).some(function(g) { return allowedGroupIds[g.id]; });
+            if (!inGroup) return;
+          }
 
           shown++;
           var drive = parseTs(a.driving);
