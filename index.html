@@ -159,6 +159,7 @@
 
 geotab.addin.hosApproachingLimit = function(api, state) {
   var currentApi = api;
+  var currentState = state;
   var timer = null;
   var countdown = null;
   var activeFilter = null;
@@ -242,7 +243,9 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
+    var groups = currentState ? currentState.getGroupFilter() : [];
+    var search = (groups && groups.length) ? { userSearch: { groups: groups } } : {};
+    currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: search }, function(avails) {
       var filtered = (avails || []).filter(function(a) {
         var drive = parseTs(a.driving);
         var duty  = parseTs(a.duty);
@@ -352,19 +355,25 @@ geotab.addin.hosApproachingLimit = function(api, state) {
   }
 
   return {
-    initialize: function(freshApi, freshState, cb) { currentApi = freshApi; cb(); },
-    focus: function(freshApi) {
+    initialize: function(freshApi, freshState, cb) { currentApi = freshApi; currentState = freshState; cb(); },
+    focus: function(freshApi, freshState) {
       currentApi = freshApi;
+      currentState = freshState;
       document.getElementById('khos-refresh').onclick = loadData;
       document.getElementById('khos-threshold').onchange = loadData;
       ['critical','warning','caution'].forEach(function(sev) {
         var card = document.getElementById('scard-' + sev);
         if (card) card.onclick = function() { filterRows(activeFilter === sev ? null : sev); };
       });
+      if (currentState) currentState.subscribe('groupFilterChanged', loadData);
       loadData();
       timer = setInterval(loadData, 10 * 60 * 1000);
     },
-    blur: function() { clearInterval(timer); timer = null; clearInterval(countdown); countdown = null; }
+    blur: function() {
+      clearInterval(timer); timer = null;
+      clearInterval(countdown); countdown = null;
+      if (currentState) currentState.unsubscribe('groupFilterChanged', loadData);
+    }
   };
 };
 </script>
