@@ -343,7 +343,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       currentApi.call('Get', { typeName: 'User', search: { groups: groupIds }, resultsLimit: 9999 }, function(users) {
         var allowedIdSet = {};
         (users || []).forEach(function(u) { allowedIdSet[u.id] = true; });
-        currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: {} }, function(avails) {
+        currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: { userSearch: {} } }, function(avails) {
           processAvails(avails, allowedIdSet);
         }, function(err) {
           if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
@@ -353,7 +353,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         setStatus('Error loading group users: ' + (err.message || err), true);
       });
     } else {
-      currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: {} }, function(avails) {
+      currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: { userSearch: {} } }, function(avails) {
         processAvails(avails, null);
       }, function(err) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
