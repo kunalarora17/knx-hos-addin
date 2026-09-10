@@ -244,7 +244,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       ? { userSearch: { groups: groupIds.map(function(id) { return { id: id }; }) } }
       : {};
 
-    setStatus('Loading HOS data…' + (hasGroupFilter ? ' (' + groupIds.length + ' group' + (groupIds.length > 1 ? 's' : '') + ')' : ''));
+    setStatus('DEBUG getGroupFilter: ' + JSON.stringify(groupIds));
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
