@@ -27,6 +27,9 @@
         <input type="number" id="khos-threshold" value="60" min="5" max="660" aria-label="Alert threshold in minutes">
         min
       </div>
+      <div class="ctrl-group">
+        <input type="text" id="khos-group-search" placeholder="Filter by group…" aria-label="Filter by group name">
+      </div>
 <button class="btn" id="khos-refresh">Refresh</button>
     </div>
   </div>
@@ -69,10 +72,11 @@
           <th>Drive Remaining</th>
           <th>Cycle Remaining</th>
           <th>Status</th>
+          <th>Groups</th>
         </tr>
       </thead>
       <tbody id="khos-tbody">
-        <tr><td colspan="5" class="msg-cell">Loading…</td></tr>
+        <tr><td colspan="6" class="msg-cell">Loading…</td></tr>
       </tbody>
     </table>
   </div>
@@ -94,6 +98,8 @@
     '.ctrl-group { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; }',
     '.ctrl-group input[type="number"] { width: 50px; padding: 5px 7px; border: 1px solid #cbd5e1 !important; border-radius: 6px; font-size: 13px; color: #0f172a; text-align: center; background: white !important; }',
     '.ctrl-group input[type="number"]:focus { outline: none; border-color: #3b82f6 !important; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }',
+    '.ctrl-group input[type="text"] { width: 160px; padding: 5px 9px; border: 1px solid #cbd5e1 !important; border-radius: 6px; font-size: 13px; color: #0f172a; background: white !important; }',
+    '.ctrl-group input[type="text"]:focus { outline: none; border-color: #3b82f6 !important; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }',
     '.toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; cursor: pointer; user-select: none; }',
     '.btn { padding: 7px 18px !important; background: #1d4ed8 !important; color: white !important; border: none !important; border-radius: 7px; font-size: 13px !important; font-weight: 600; cursor: pointer; letter-spacing: 0.2px; transition: background 0.15s; }',
     '.btn:hover { background: #1e40af !important; }',
@@ -150,6 +156,7 @@
     '.sb-PC { background: #fef9c3 !important; color: #854d0e !important; }',
     '.sb-YM { background: #ffedd5 !important; color: #9a3412 !important; }',
     '.sb-NA { background: #f1f5f9 !important; color: #94a3b8 !important; }',
+    '.group-tag { display: inline-block !important; padding: 2px 7px !important; border-radius: 4px; font-size: 11px !important; font-weight: 500 !important; background: #e2e8f0 !important; color: #334155 !important; margin: 2px 3px 0 0; white-space: nowrap; }',
     '.msg-cell { text-align: center !important; padding: 48px 16px !important; color: #6b7280 !important; font-size: 14px !important; }',
     '.msg-cell.err { color: #dc2626 !important; }',
     '.footer { font-size: 11px; color: #94a3b8; margin-top: 10px; text-align: right; }'
@@ -162,6 +169,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
   var timer = null;
   var countdown = null;
   var activeFilter = null;
+  var groupFilterText = '';
 
   var STATUS_LABELS = {
     'D':   ['Driving',     'D'],
@@ -238,29 +246,30 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var threshSecs = threshMins * 60;
     var tbody = document.getElementById('khos-tbody');
 
-    var groupIds = state.getGroupFilter();
-    var hasGroupFilter = groupIds && groupIds.length > 0;
-
-    setStatus('Loading HOS data…' + (hasGroupFilter ? ' (' + groupIds.length + ' group' + (groupIds.length > 1 ? 's' : '') + ')' : ''));
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
+    setStatus('Loading HOS data…');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    function processAvails(avails, allowedIdSet) {
-      var filtered = (avails || []).filter(function(a) {
+    // Fetch group name map and availability data in parallel
+    currentApi.multiCall([
+      ['Get', { typeName: 'Group' }],
+      ['Get', { typeName: 'DutyStatusAvailability', search: {} }]
+    ], function(res) {
+      var groupMap = {};
+      (res[0] || []).forEach(function(g) { if (g.id && g.name) groupMap[g.id] = g.name; });
+
+      var filtered = (res[1] || []).filter(function(a) {
         var drive = parseTs(a.driving);
         var duty  = parseTs(a.duty);
-        if (!(drive > 0 && drive < threshSecs && duty > 0)) return false;
-        if (allowedIdSet && !allowedIdSet[a.driver.id]) return false;
-        return true;
+        return drive > 0 && drive < threshSecs && duty > 0;
       });
-
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
       if (filtered.length === 0) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
-        setStatus('All clear — no drivers approaching limit' + (hasGroupFilter ? ' in selected group(s)' : '') + '. Updated: ' + new Date().toLocaleTimeString());
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
+        setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
         setCounts(0, 0, 0);
-        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
+        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 10 min.';
         return;
       }
 
@@ -299,29 +308,39 @@ geotab.addin.hosApproachingLimit = function(api, state) {
             ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
             : esc(a.driver.id);
 
+          var groupNames = (user && user.groups)
+            ? user.groups.map(function(g) { return groupMap[g.id] || ''; }).filter(Boolean)
+            : [];
+          var groupsHtml = groupNames.length
+            ? groupNames.map(function(n) { return '<span class="group-tag">' + esc(n) + '</span>'; }).join('')
+            : '<span style="color:#94a3b8">—</span>';
+
           var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
           var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
 
           var tr = document.createElement('tr');
           tr.className = 'row-' + sev;
           tr.dataset.sev = sev;
-          if (activeFilter && activeFilter !== sev) tr.style.display = 'none';
+          tr.dataset.groups = groupNames.join(' ').toLowerCase();
           tr.innerHTML =
             '<td>' + pill(sev) + '</td>' +
             '<td class="dname">' + name + (user && user.employeeNo ? '<div class="driver-code">' + esc(user.employeeNo) + '</div>' : '') + '</td>' +
             '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
             '<td class="tcell">' + fmtTime(cycle) + '</td>' +
-            '<td>' + statusBadge(code) + '</td>';
+            '<td>' + statusBadge(code) + '</td>' +
+            '<td class="tcell">' + groupsHtml + '</td>';
           tbody.appendChild(tr);
         });
 
         setCounts(nC, nW, nU);
 
         if (shown === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
+        } else {
+          applyFilters();
         }
 
-        setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit' + (hasGroupFilter ? ' in selected group(s)' : '') + '. Updated: ' + new Date().toLocaleTimeString());
+        setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
         clearInterval(countdown);
         var nextAt = Date.now() + 10 * 60 * 1000;
         countdown = setInterval(function() {
@@ -335,45 +354,31 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       }, function(err) {
         setStatus('Error loading driver details: ' + (err.message || err), true);
       });
-    }
 
-    if (hasGroupFilter) {
-      // DutyStatusAvailability ignores userSearch.groups, so pre-fetch users
-      // in the selected groups and post-filter availability results client-side.
-      currentApi.call('Get', { typeName: 'User', search: { groups: groupIds }, resultsLimit: 9999 }, function(users) {
-        var allowedIdSet = {};
-        (users || []).forEach(function(u) { allowedIdSet[u.id] = true; });
-        currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: { userSearch: {} } }, function(avails) {
-          processAvails(avails, allowedIdSet);
-        }, function(err) {
-          if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
-          setStatus('Error: ' + (err.message || err), true);
-        });
-      }, function(err) {
-        setStatus('Error loading group users: ' + (err.message || err), true);
-      });
-    } else {
-      currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: { userSearch: {} } }, function(avails) {
-        processAvails(avails, null);
-      }, function(err) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
-        setStatus('Error: ' + (err.message || err), true);
-      });
-    }
+    }, function(err) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
+      setStatus('Error: ' + (err.message || err), true);
+    });
+  }
+
+  function applyFilters() {
+    var gf = groupFilterText.trim().toLowerCase();
+    document.querySelectorAll('#khos-tbody tr[data-sev]').forEach(function(r) {
+      var sevOk = !activeFilter || r.dataset.sev === activeFilter;
+      var grpOk = !gf || (r.dataset.groups || '').indexOf(gf) !== -1;
+      r.style.display = (sevOk && grpOk) ? '' : 'none';
+    });
   }
 
   function filterRows(sev) {
     activeFilter = sev;
-    var rows = document.querySelectorAll('#khos-tbody tr[data-sev]');
-    rows.forEach(function(r) {
-      r.style.display = (sev && r.dataset.sev !== sev) ? 'none' : '';
-    });
     ['critical','warning','caution'].forEach(function(s) {
       var card = document.getElementById('scard-' + s);
       if (!card) return;
       card.classList.toggle('active', s === sev);
       card.classList.toggle('dimmed', !!sev && s !== sev);
     });
+    applyFilters();
   }
 
   return {
@@ -382,6 +387,8 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       currentApi = freshApi;
       document.getElementById('khos-refresh').onclick = loadData;
       document.getElementById('khos-threshold').onchange = loadData;
+      var gInput = document.getElementById('khos-group-search');
+      if (gInput) gInput.oninput = function() { groupFilterText = gInput.value; applyFilters(); };
       ['critical','warning','caution'].forEach(function(sev) {
         var card = document.getElementById('scard-' + sev);
         if (card) card.onclick = function() { filterRows(activeFilter === sev ? null : sev); };
