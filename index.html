@@ -240,19 +240,18 @@ geotab.addin.hosApproachingLimit = function(api, state) {
 
     var groupIds = state.getGroupFilter();
     var hasGroupFilter = groupIds && groupIds.length > 0;
-    var search = hasGroupFilter
-      ? { userSearch: { groups: groupIds } }
-      : {};
 
     setStatus('Loading HOS data…' + (hasGroupFilter ? ' (' + groupIds.length + ' group' + (groupIds.length > 1 ? 's' : '') + ')' : ''));
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: search }, function(avails) {
+    function processAvails(avails, allowedIdSet) {
       var filtered = (avails || []).filter(function(a) {
         var drive = parseTs(a.driving);
         var duty  = parseTs(a.duty);
-        return drive > 0 && drive < threshSecs && duty > 0;
+        if (!(drive > 0 && drive < threshSecs && duty > 0)) return false;
+        if (allowedIdSet && !allowedIdSet[a.driver.id]) return false;
+        return true;
       });
 
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
@@ -336,11 +335,31 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       }, function(err) {
         setStatus('Error loading driver details: ' + (err.message || err), true);
       });
+    }
 
-    }, function(err) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
-      setStatus('Error: ' + (err.message || err), true);
-    });
+    if (hasGroupFilter) {
+      // DutyStatusAvailability ignores userSearch.groups, so pre-fetch users
+      // in the selected groups and post-filter availability results client-side.
+      currentApi.call('Get', { typeName: 'User', search: { groups: groupIds }, resultsLimit: 9999 }, function(users) {
+        var allowedIdSet = {};
+        (users || []).forEach(function(u) { allowedIdSet[u.id] = true; });
+        currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: {} }, function(avails) {
+          processAvails(avails, allowedIdSet);
+        }, function(err) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
+          setStatus('Error: ' + (err.message || err), true);
+        });
+      }, function(err) {
+        setStatus('Error loading group users: ' + (err.message || err), true);
+      });
+    } else {
+      currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: {} }, function(avails) {
+        processAvails(avails, null);
+      }, function(err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
+        setStatus('Error: ' + (err.message || err), true);
+      });
+    }
   }
 
   function filterRows(sev) {
