@@ -250,15 +250,32 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    // Fetch group name map and availability data in parallel
-    currentApi.multiCall([
-      ['Get', { typeName: 'Group' }],
-      ['Get', { typeName: 'DutyStatusAvailability', search: { userSearch: { groups: state.getGroupFilter() } } }]
-    ], function(res) {
+    // Step 1: fetch all groups to build name map and identify root group
+    currentApi.call('Get', { typeName: 'Group' }, function(allGroups) {
       var groupMap = {};
-      (res[0] || []).forEach(function(g) { if (g.id && g.name) groupMap[g.id] = g.name; });
+      var rootGroupId = null;
+      (allGroups || []).forEach(function(g) {
+        if (g.id && g.name) {
+          groupMap[g.id] = g.name;
+          if (!rootGroupId && g.parent && g.parent.id === 'b1') rootGroupId = g.id;
+          if (!rootGroupId && (!g.parent || !g.parent.id)) rootGroupId = g.id;
+        }
+      });
 
-      var filtered = (res[1] || []).filter(function(a) {
+      // Build a valid userSearch — use org filter if set, otherwise root group
+      var gf = state.getGroupFilter();
+      var groupsForSearch = (gf && gf.length > 0) ? gf
+        : (rootGroupId ? [{ id: rootGroupId }] : null);
+
+      if (!groupsForSearch) {
+        setStatus('Could not determine a group to search — please select a group filter.', true);
+        return;
+      }
+
+      // Step 2: fetch DutyStatusAvailability
+      currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: { userSearch: { groups: groupsForSearch } } }, function(avails) {
+
+      var filtered = (avails || []).filter(function(a) {
         var drive = parseTs(a.driving);
         var duty  = parseTs(a.duty);
         return drive > 0 && drive < threshSecs && duty > 0;
@@ -359,7 +376,11 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
       setStatus('Error: ' + (err.message || err), true);
     });
-  }
+
+  }, function(err) {
+    setStatus('Error loading groups: ' + (err.message || err), true);
+  });
+}
 
   function applyFilters() {
     var gf = groupFilterText.trim().toLowerCase();
