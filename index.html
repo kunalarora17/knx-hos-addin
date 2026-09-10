@@ -281,7 +281,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           var groupIdSet = {};
           filtered.forEach(function(a, i) {
             var u = Array.isArray(results[i * 2]) ? results[i * 2][0] : results[i * 2];
-            if (u && u.groups) u.groups.forEach(function(g) { if (g.id) groupIdSet[g.id] = true; });
+            if (u && u.driverGroups) u.driverGroups.forEach(function(g) { if (g.id) groupIdSet[g.id] = true; });
           });
           var uniqueGroupIds = Object.keys(groupIdSet);
 
@@ -313,13 +313,11 @@ geotab.addin.hosApproachingLimit = function(api, state) {
                 ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
                 : esc(a.driver.id);
 
-              // DEBUG: dump all user object keys so we can find where groups live
-              var debugKeys = user ? Object.keys(user).map(function(k) {
-                var v = user[k];
-                return k + (Array.isArray(v) ? '[' + v.length + ']' : '=' + typeof v);
-              }).join(', ') : 'user=null';
-              var groupNames = [];
-              var groupsHtml = '<span style="font-size:9px;color:#475569;word-break:break-all">' + esc(debugKeys) + '</span>';
+              var driverGroups = (user && user.driverGroups) || [];
+              var groupNames = driverGroups.map(function(g) { return groupMap[g.id] || ''; }).filter(Boolean);
+              var groupsHtml = groupNames.length
+                ? groupNames.map(function(n) { return '<span class="group-tag">' + esc(n) + '</span>'; }).join('')
+                : '<span style="color:#94a3b8;font-size:12px">—</span>';
 
               var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
               var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
