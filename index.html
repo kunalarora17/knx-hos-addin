@@ -318,6 +318,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
                 var v = user[k];
                 return k + (Array.isArray(v) ? '[' + v.length + ']' : '=' + typeof v);
               }).join(', ') : 'user=null';
+              var groupNames = [];
               var groupsHtml = '<span style="font-size:9px;color:#475569;word-break:break-all">' + esc(debugKeys) + '</span>';
 
               var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
