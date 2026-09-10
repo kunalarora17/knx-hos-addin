@@ -10,7 +10,7 @@
 
   <!-- Bespoke disclaimer (non-dismissible) -->
   <div class="bespoke-banner">
-    <strong>Notice:</strong> This add-in is a custom solution built for Knight-Swift Transportation.
+    <strong>Notice:</strong> This add-in is a custom solution built for Knight Transportation.
     It is not a standard Geotab product and is not covered by Geotab support SLAs.
     For issues, contact <a href="mailto:kunalarora@geotab.com" style="color:inherit">kunalarora@geotab.com</a>.
   </div>
@@ -159,7 +159,6 @@
 
 geotab.addin.hosApproachingLimit = function(api, state) {
   var currentApi = api;
-  var currentState = state;
   var timer = null;
   var countdown = null;
   var activeFilter = null;
@@ -181,8 +180,10 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var p = ts.split(':');
     var s;
     if (p.length === 4) {
+      // D:HH:MM:SS format
       s = parseInt(p[0], 10) * 86400 + parseInt(p[1], 10) * 3600 + parseInt(p[2], 10) * 60 + parseFloat(p[3] || 0);
     } else {
+      // HH:MM:SS format
       s = parseInt(p[0], 10) * 3600 + parseInt(p[1], 10) * 60 + parseFloat(p[2] || 0);
     }
     return neg ? -s : s;
@@ -237,23 +238,30 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var threshSecs = threshMins * 60;
     var tbody = document.getElementById('khos-tbody');
 
-    setStatus('Loading HOS data…');
+    var groupIds = state.getGroupFilter();
+    var hasGroupFilter = groupIds && groupIds.length > 0;
+    var search = hasGroupFilter
+      ? { userSearch: { groups: groupIds.map(function(id) { return { id: id }; }) } }
+      : {};
+
+    setStatus('Loading HOS data…' + (hasGroupFilter ? ' (' + groupIds.length + ' group' + (groupIds.length > 1 ? 's' : '') + ')' : ''));
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    currentApi.call('Get', { typeName: 'DutyStatusAvailability' }, function(avails) {
+    currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: search }, function(avails) {
       var filtered = (avails || []).filter(function(a) {
         var drive = parseTs(a.driving);
         var duty  = parseTs(a.duty);
         return drive > 0 && drive < threshSecs && duty > 0;
       });
+
       filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
       if (filtered.length === 0) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
-        setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
+        setStatus('All clear — no drivers approaching limit' + (hasGroupFilter ? ' in selected group(s)' : '') + '. Updated: ' + new Date().toLocaleTimeString());
         setCounts(0, 0, 0);
-        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 10 min.';
+        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 5 min.';
         return;
       }
 
@@ -291,8 +299,10 @@ geotab.addin.hosApproachingLimit = function(api, state) {
           var name  = user
             ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
             : esc(a.driver.id);
+
           var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
           var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
+
           var tr = document.createElement('tr');
           tr.className = 'row-' + sev;
           tr.dataset.sev = sev;
@@ -307,10 +317,12 @@ geotab.addin.hosApproachingLimit = function(api, state) {
         });
 
         setCounts(nC, nW, nU);
+
         if (shown === 0) {
           tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
         }
-        setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
+
+        setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit' + (hasGroupFilter ? ' in selected group(s)' : '') + '. Updated: ' + new Date().toLocaleTimeString());
         clearInterval(countdown);
         var nextAt = Date.now() + 10 * 60 * 1000;
         countdown = setInterval(function() {
@@ -346,10 +358,9 @@ geotab.addin.hosApproachingLimit = function(api, state) {
   }
 
   return {
-    initialize: function(freshApi, freshState, cb) { currentApi = freshApi; currentState = freshState; cb(); },
-    focus: function(freshApi, freshState) {
+    initialize: function(freshApi, freshState, cb) { currentApi = freshApi; cb(); },
+    focus: function(freshApi) {
       currentApi = freshApi;
-      currentState = freshState;
       document.getElementById('khos-refresh').onclick = loadData;
       document.getElementById('khos-threshold').onchange = loadData;
       ['critical','warning','caution'].forEach(function(sev) {
@@ -359,10 +370,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
       loadData();
       timer = setInterval(loadData, 10 * 60 * 1000);
     },
-    blur: function() {
-      clearInterval(timer); timer = null;
-      clearInterval(countdown); countdown = null;
-    }
+    blur: function() { clearInterval(timer); timer = null; clearInterval(countdown); countdown = null; }
   };
 };
 </script>
