@@ -313,12 +313,22 @@ geotab.addin.hosApproachingLimit = function(api, state) {
                 ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
                 : esc(a.driver.id);
 
-              var groupNames = (user && user.groups)
-                ? user.groups.map(function(g) { return groupMap[g.id] || ''; }).filter(Boolean)
+              var rawGroups = (user && user.groups) ? user.groups : null;
+              var groupNames = rawGroups
+                ? rawGroups.map(function(g) { return groupMap[g.id] || ''; }).filter(Boolean)
                 : [];
-              var groupsHtml = groupNames.length
-                ? groupNames.map(function(n) { return '<span class="group-tag">' + esc(n) + '</span>'; }).join('')
-                : '<span style="color:#94a3b8">—</span>';
+              // DEBUG: show raw group IDs so we can see what's in user.groups
+              var groupsHtml;
+              if (!rawGroups) {
+                groupsHtml = '<span style="color:red;font-size:10px">user.groups=null</span>';
+              } else if (rawGroups.length === 0) {
+                groupsHtml = '<span style="color:red;font-size:10px">user.groups=[]</span>';
+              } else if (groupNames.length === 0) {
+                // Have group IDs but no names — show raw IDs
+                groupsHtml = rawGroups.map(function(g) { return '<span class="group-tag" style="background:#fee2e2;color:#991b1b">' + esc(g.id || JSON.stringify(g)) + '</span>'; }).join('');
+              } else {
+                groupsHtml = groupNames.map(function(n) { return '<span class="group-tag">' + esc(n) + '</span>'; }).join('');
+              }
 
               var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
               var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
