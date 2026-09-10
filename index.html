@@ -253,7 +253,7 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     // Fetch group name map and availability data in parallel
     currentApi.multiCall([
       ['Get', { typeName: 'Group' }],
-      ['Get', { typeName: 'DutyStatusAvailability', search: {} }]
+      ['Get', { typeName: 'DutyStatusAvailability', search: { userSearch: { groups: state.getGroupFilter() } } }]
     ], function(res) {
       var groupMap = {};
       (res[0] || []).forEach(function(g) { if (g.id && g.name) groupMap[g.id] = g.name; });
