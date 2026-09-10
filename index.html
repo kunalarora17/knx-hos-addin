@@ -313,22 +313,12 @@ geotab.addin.hosApproachingLimit = function(api, state) {
                 ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
                 : esc(a.driver.id);
 
-              var rawGroups = (user && user.groups) ? user.groups : null;
-              var groupNames = rawGroups
-                ? rawGroups.map(function(g) { return groupMap[g.id] || ''; }).filter(Boolean)
-                : [];
-              // DEBUG: show raw group IDs so we can see what's in user.groups
-              var groupsHtml;
-              if (!rawGroups) {
-                groupsHtml = '<span style="color:red;font-size:10px">user.groups=null</span>';
-              } else if (rawGroups.length === 0) {
-                groupsHtml = '<span style="color:red;font-size:10px">user.groups=[]</span>';
-              } else if (groupNames.length === 0) {
-                // Have group IDs but no names — show raw IDs
-                groupsHtml = rawGroups.map(function(g) { return '<span class="group-tag" style="background:#fee2e2;color:#991b1b">' + esc(g.id || JSON.stringify(g)) + '</span>'; }).join('');
-              } else {
-                groupsHtml = groupNames.map(function(n) { return '<span class="group-tag">' + esc(n) + '</span>'; }).join('');
-              }
+              // DEBUG: dump all user object keys so we can find where groups live
+              var debugKeys = user ? Object.keys(user).map(function(k) {
+                var v = user[k];
+                return k + (Array.isArray(v) ? '[' + v.length + ']' : '=' + typeof v);
+              }).join(', ') : 'user=null';
+              var groupsHtml = '<span style="font-size:9px;color:#475569;word-break:break-all">' + esc(debugKeys) + '</span>';
 
               var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
               var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
