@@ -241,10 +241,10 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     var groupIds = state.getGroupFilter();
     var hasGroupFilter = groupIds && groupIds.length > 0;
     var search = hasGroupFilter
-      ? { userSearch: { groups: groupIds.map(function(id) { return { id: id }; }) } }
+      ? { userSearch: { groups: groupIds } }
       : {};
 
-    setStatus('DEBUG getGroupFilter: ' + JSON.stringify(groupIds));
+    setStatus('Loading HOS data…' + (hasGroupFilter ? ' (' + groupIds.length + ' group' + (groupIds.length > 1 ? 's' : '') + ')' : ''));
     if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
