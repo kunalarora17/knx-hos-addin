@@ -250,137 +250,160 @@ geotab.addin.hosApproachingLimit = function(api, state) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">Loading…</td></tr>';
     setCounts('—', '—', '—');
 
-    // Step 1: fetch all groups to build name map and identify root group
-    currentApi.call('Get', { typeName: 'Group' }, function(allGroups) {
-      var groupMap = {};
-      var rootGroupId = null;
-      (allGroups || []).forEach(function(g) {
-        if (g.id && g.name) {
-          groupMap[g.id] = g.name;
-          if (!rootGroupId && g.parent && g.parent.id === 'b1') rootGroupId = g.id;
-          if (!rootGroupId && (!g.parent || !g.parent.id)) rootGroupId = g.id;
-        }
-      });
+    var gf = state.getGroupFilter();
 
-      // Build a valid userSearch — use org filter if set, otherwise root group
-      var gf = state.getGroupFilter();
-      var groupsForSearch = (gf && gf.length > 0) ? gf
-        : (rootGroupId ? [{ id: rootGroupId }] : null);
-
-      if (!groupsForSearch) {
-        setStatus('Could not determine a group to search — please select a group filter.', true);
-        return;
-      }
-
-      // Step 2: fetch DutyStatusAvailability
+    function fetchAvailability(groupsForSearch) {
       currentApi.call('Get', { typeName: 'DutyStatusAvailability', search: { userSearch: { groups: groupsForSearch } } }, function(avails) {
-
-      var filtered = (avails || []).filter(function(a) {
-        var drive = parseTs(a.driving);
-        var duty  = parseTs(a.duty);
-        return drive > 0 && drive < threshSecs && duty > 0;
-      });
-      filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
-
-      if (filtered.length === 0) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
-        setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
-        setCounts(0, 0, 0);
-        var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 10 min.';
-        return;
-      }
-
-      var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      var calls = [];
-      filtered.forEach(function(a) {
-        calls.push(['Get', { typeName: 'User', search: { id: a.driver.id } }]);
-        calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since } }]);
-      });
-
-      currentApi.multiCall(calls, function(results) {
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        var shown = 0, nC = 0, nW = 0, nU = 0;
-
-        filtered.forEach(function(a, i) {
-          var userArr = results[i * 2] || [];
-          var logArr  = results[i * 2 + 1] || [];
-          var user = Array.isArray(userArr) ? userArr[0] : userArr;
-
-          var logs = logArr.filter(function(l) {
-            var t = l.status;
-            return t==='D'||t==='ON'||t==='OFF'||t==='SB'||t==='PC'||t==='YM'||t==='WT';
-          });
-          logs.sort(function(x, y) { return new Date(y.dateTime||0) - new Date(x.dateTime||0); });
-          var code = logs[0] ? logs[0].status : null;
-
-          if (code !== 'D' && code !== 'ON') return;
-
-          shown++;
+        var filtered = (avails || []).filter(function(a) {
           var drive = parseTs(a.driving);
-          var cycle = parseTs(a.cycle);
-          var sev   = severity(drive);
-          if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
-          var name  = user
-            ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
-            : esc(a.driver.id);
+          var duty  = parseTs(a.duty);
+          return drive > 0 && drive < threshSecs && duty > 0;
+        });
+        filtered.sort(function(a, b) { return parseTs(a.driving) - parseTs(b.driving); });
 
-          var groupNames = (user && user.groups)
-            ? user.groups.map(function(g) { return groupMap[g.id] || ''; }).filter(Boolean)
-            : [];
-          var groupsHtml = groupNames.length
-            ? groupNames.map(function(n) { return '<span class="group-tag">' + esc(n) + '</span>'; }).join('')
-            : '<span style="color:#94a3b8">—</span>';
+        if (filtered.length === 0) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No drivers within ' + threshMins + ' minutes of their drive limit.</td></tr>';
+          setStatus('All clear — no drivers approaching limit. Updated: ' + new Date().toLocaleTimeString());
+          setCounts(0, 0, 0);
+          var f = document.getElementById('khos-footer'); if (f) f.textContent = 'Auto-refreshes every 10 min.';
+          return;
+        }
 
-          var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
-          var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
-
-          var tr = document.createElement('tr');
-          tr.className = 'row-' + sev;
-          tr.dataset.sev = sev;
-          tr.dataset.groups = groupNames.join(' ').toLowerCase();
-          tr.innerHTML =
-            '<td>' + pill(sev) + '</td>' +
-            '<td class="dname">' + name + (user && user.employeeNo ? '<div class="driver-code">' + esc(user.employeeNo) + '</div>' : '') + '</td>' +
-            '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
-            '<td class="tcell">' + fmtTime(cycle) + '</td>' +
-            '<td>' + statusBadge(code) + '</td>' +
-            '<td class="tcell">' + groupsHtml + '</td>';
-          tbody.appendChild(tr);
+        var since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        var calls = [];
+        filtered.forEach(function(a) {
+          calls.push(['Get', { typeName: 'User', search: { id: a.driver.id } }]);
+          calls.push(['Get', { typeName: 'DutyStatusLog', search: { userSearch: { id: a.driver.id }, fromDate: since } }]);
         });
 
-        setCounts(nC, nW, nU);
+        currentApi.multiCall(calls, function(results) {
+          // Collect unique group IDs from all returned user records
+          var groupIdSet = {};
+          filtered.forEach(function(a, i) {
+            var u = Array.isArray(results[i * 2]) ? results[i * 2][0] : results[i * 2];
+            if (u && u.groups) u.groups.forEach(function(g) { if (g.id) groupIdSet[g.id] = true; });
+          });
+          var uniqueGroupIds = Object.keys(groupIdSet);
 
-        if (shown === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
-        } else {
-          applyFilters();
-        }
+          function renderRows(groupMap) {
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            var shown = 0, nC = 0, nW = 0, nU = 0;
 
-        setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
-        clearInterval(countdown);
-        var nextAt = Date.now() + 10 * 60 * 1000;
-        countdown = setInterval(function() {
-          var rem = Math.max(0, nextAt - Date.now());
-          var m = Math.floor(rem / 60000);
-          var s = Math.floor((rem % 60000) / 1000);
-          var f = document.getElementById('khos-footer');
-          if (f) f.textContent = 'Next refresh in ' + m + ':' + (s < 10 ? '0' : '') + s;
-        }, 1000);
+            filtered.forEach(function(a, i) {
+              var userArr = results[i * 2] || [];
+              var logArr  = results[i * 2 + 1] || [];
+              var user = Array.isArray(userArr) ? userArr[0] : userArr;
+
+              var logs = logArr.filter(function(l) {
+                var t = l.status;
+                return t==='D'||t==='ON'||t==='OFF'||t==='SB'||t==='PC'||t==='YM'||t==='WT';
+              });
+              logs.sort(function(x, y) { return new Date(y.dateTime||0) - new Date(x.dateTime||0); });
+              var code = logs[0] ? logs[0].status : null;
+
+              if (code !== 'D' && code !== 'ON') return;
+
+              shown++;
+              var drive = parseTs(a.driving);
+              var cycle = parseTs(a.cycle);
+              var sev   = severity(drive);
+              if (sev === 'critical') nC++; else if (sev === 'warning') nW++; else nU++;
+              var name  = user
+                ? (esc((user.firstName || '') + ' ' + (user.lastName || '')).trim() || esc(a.driver.id))
+                : esc(a.driver.id);
+
+              var groupNames = (user && user.groups)
+                ? user.groups.map(function(g) { return groupMap[g.id] || ''; }).filter(Boolean)
+                : [];
+              var groupsHtml = groupNames.length
+                ? groupNames.map(function(n) { return '<span class="group-tag">' + esc(n) + '</span>'; }).join('')
+                : '<span style="color:#94a3b8">—</span>';
+
+              var pct = Math.max(0, Math.min(100, (drive / threshSecs) * 100)).toFixed(0);
+              var bar = '<div class="drive-bar"><div class="drive-bar-fill" style="width:' + pct + '%"></div></div>';
+
+              var tr = document.createElement('tr');
+              tr.className = 'row-' + sev;
+              tr.dataset.sev = sev;
+              tr.dataset.groups = groupNames.join(' ').toLowerCase();
+              tr.innerHTML =
+                '<td>' + pill(sev) + '</td>' +
+                '<td class="dname">' + name + (user && user.employeeNo ? '<div class="driver-code">' + esc(user.employeeNo) + '</div>' : '') + '</td>' +
+                '<td><div class="drive-val">' + fmtTime(drive) + '</div>' + bar + '</td>' +
+                '<td class="tcell">' + fmtTime(cycle) + '</td>' +
+                '<td>' + statusBadge(code) + '</td>' +
+                '<td class="tcell">' + groupsHtml + '</td>';
+              tbody.appendChild(tr);
+            });
+
+            setCounts(nC, nW, nU);
+            if (shown === 0) {
+              tbody.innerHTML = '<tr><td colspan="6" class="msg-cell">No active drivers within ' + threshMins + '-min threshold.</td></tr>';
+            } else {
+              applyFilters();
+            }
+            setStatus(shown + ' driver' + (shown !== 1 ? 's' : '') + ' approaching drive limit. Updated: ' + new Date().toLocaleTimeString());
+            clearInterval(countdown);
+            var nextAt = Date.now() + 10 * 60 * 1000;
+            countdown = setInterval(function() {
+              var rem = Math.max(0, nextAt - Date.now());
+              var m = Math.floor(rem / 60000);
+              var s = Math.floor((rem % 60000) / 1000);
+              var f = document.getElementById('khos-footer');
+              if (f) f.textContent = 'Next refresh in ' + m + ':' + (s < 10 ? '0' : '') + s;
+            }, 1000);
+          }
+
+          if (uniqueGroupIds.length === 0) {
+            renderRows({});
+            return;
+          }
+
+          // Resolve group names by specific ID — reliable even for large group trees
+          var groupCalls = uniqueGroupIds.map(function(id) {
+            return ['Get', { typeName: 'Group', search: { id: id } }];
+          });
+          currentApi.multiCall(groupCalls, function(groupResults) {
+            var groupMap = {};
+            groupResults.forEach(function(arr) {
+              var g = Array.isArray(arr) ? arr[0] : arr;
+              if (g && g.id && g.name) groupMap[g.id] = g.name;
+            });
+            renderRows(groupMap);
+          }, function() {
+            renderRows({});
+          });
+
+        }, function(err) {
+          setStatus('Error loading driver details: ' + (err.message || err), true);
+        });
 
       }, function(err) {
-        setStatus('Error loading driver details: ' + (err.message || err), true);
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
+        setStatus('Error: ' + (err.message || err), true);
       });
+    }
 
-    }, function(err) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="msg-cell err">Failed to load HOS data. Check that HOS is enabled in this database.</td></tr>';
-      setStatus('Error: ' + (err.message || err), true);
-    });
-
-  }, function(err) {
-    setStatus('Error loading groups: ' + (err.message || err), true);
-  });
-}
+    if (gf && gf.length > 0) {
+      fetchAvailability(gf);
+    } else {
+      // No org filter set — need to find root company group for a valid userSearch
+      currentApi.call('Get', { typeName: 'Group' }, function(allGroups) {
+        var rootGroup = null;
+        (allGroups || []).forEach(function(g) {
+          if (!rootGroup && g.id && (!g.parent || !g.parent.id)) rootGroup = g;
+        });
+        if (!rootGroup) {
+          setStatus('Could not determine group for HOS query. Please select a group filter.', true);
+          return;
+        }
+        fetchAvailability([{ id: rootGroup.id }]);
+      }, function(err) {
+        setStatus('Error: ' + (err.message || err), true);
+      });
+    }
+  }
 
   function applyFilters() {
     var gf = groupFilterText.trim().toLowerCase();
